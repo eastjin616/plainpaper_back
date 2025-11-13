@@ -1,64 +1,28 @@
-import psycopg2
-from psycopg2 import sql
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-# ✅ DB 연결 설정
-DB_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "plainpaper",
-    "user": "postgres",
-    "password": "postgres"
-}
+from database import Base, engine, SessionLocal 
+from models import *
+from routers import auth
 
-# ✅ main 함수
-def main():
-    try:
-        # 1️⃣ PostgreSQL 연결
-        conn = psycopg2.connect(**DB_CONFIG)
-        conn.autocommit = True  # 자동 커밋 설정
-        cur = conn.cursor()
+app = FastAPI()
 
-        print("✅ PostgreSQL 연결 성공!")
+# -----------------------------------------
+# 🔥 CORS 설정은 FastAPI(app) 선언 직후에 넣는다
+# -----------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-        # 2️⃣ 간단한 테스트용 테이블 생성
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS test_member (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50),
-                email VARCHAR(100)
-            );
-        """)
-        print("🧱 테이블 생성 완료 (test_member)")
+#데이터베이스 테이블 생성
+Base.metadata.create_all(bind=engine)
 
-        # 3️⃣ 데이터 삽입
-        cur.execute("""
-            INSERT INTO test_member (name, email)
-            VALUES (%s, %s)
-            RETURNING id;
-        """, ("서동진", "test@example.com"))
-        new_id = cur.fetchone()[0]
-        print(f"📥 데이터 삽입 완료! 새 id = {new_id}")
-
-        # 4️⃣ 데이터 조회
-        cur.execute("SELECT * FROM test_member;")
-        rows = cur.fetchall()
-        print("\n📊 현재 test_member 데이터:")
-        for row in rows:
-            print(row)
-
-        # 5️⃣ PostgreSQL 버전 확인
-        cur.execute("SELECT version();")
-        version = cur.fetchone()[0]
-        print(f"\n💡 PostgreSQL 버전: {version}")
-
-    except Exception as e:
-        print("❌ 오류 발생:", e)
-
-    finally:
-        if conn:
-            cur.close()
-            conn.close()
-            print("🔚 연결 종료")
-
-if __name__ == "__main__":
-    main()
+#라우터 등록
+app.include_router(auth.router)
