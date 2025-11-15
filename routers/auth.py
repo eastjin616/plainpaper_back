@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import SessionLocal
-from models.member import Member
-from uuid import uuid4
-from datetime import datetime
+from models.email_verification import EmailVerification
+import random
 from pydantic import BaseModel
+from utils.email import send_verification_email
 
-router = APIRouter()
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# DB Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -16,30 +15,47 @@ def get_db():
     finally:
         db.close()
 
-# 회원가입 요청 바디
-class RegisterRequest(BaseModel):
-    name: str
+
+class SendCodeRequest(BaseModel):
     email: str
-    password: str
 
-@router.post("/register")
-def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
-    # 이메일 중복 체크
-    existing = db.query(Member).filter(Member.email == request.email).first()
+class VerifyCodeRequest(BaseModel):
+    email: str
+    verification_code: str
+
+
+@router.post("/send-code")
+def send_code(request: SendCodeRequest, db: Session = Depends(get_db)):
+    email = request.email
+
+    # 기존 기록 삭제 (재발급 대비)
+    existing = db.query(EmailVerification).filter(EmailVerification.email == email).first()
     if existing:
-        raise HTTPException(status_code=400, detail="이미 존재하는 이메일입니다.")
+        db.delete(existing)
+        db.commit()
 
-    # 새 유저 생성
-    new_user = Member(
-        member_id=uuid4(),
-        name=request.name,
-        email=request.email,
-        password=request.password,   # → 나중에 반드시 bcrypt로 암호화해야 함
-        create_at=datetime.utcnow()
-    )
-
-    db.add(new_user)
+    # 새 인증코드 생성 & 저장
+    code = str(random.randint(100000, 999999))
+    new_record = EmailVerification(email=email, code=code)
+    db.add(new_record)
     db.commit()
-    db.refresh(new_user)
 
-    return {"message": "회원가입 성공", "member_id": str(new_user.member_id)}
+    send_verification_email(email, code)
+
+    return {"message": "인증코드 발송 완료"}
+
+
+@router.post("/verify-code")
+def verify_code(request: VerifyCodeRequest, db: Session = Depends(get_db)):
+    record = db.query(EmailVerification).filter(EmailVerification.email == request.email).first()
+
+    if not record:
+        raise HTTPException(status_code=400, detail="인증 요청이 없습니다.")
+
+    if record.code != request.verification_code:
+        raise HTTPException(status_code=400, detail="잘못된 인증코드")
+
+    record.verified = True
+    db.commit()
+
+    return {"message": "이메일 인증 완료"}

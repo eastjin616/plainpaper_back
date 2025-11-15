@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, Boolean,DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from uuid import uuid4
 from datetime import datetime
@@ -11,6 +11,7 @@ class Member(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
     password = Column(String(255), nullable=False)
+
 
     create_at = Column(DateTime, default=datetime.utcnow)
     update_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -14,4 +14,3 @@ class FileQueue(Base):
     start_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
     finished_at = Column(DateTime)
     error_message = Column(Text)
-    
